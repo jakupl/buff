@@ -3,7 +3,7 @@ name: Update BUFF price list
 on:
   schedule:
     # runs at 10 minutes past every hour (cron uses UTC)
-    - cron: '10 * * * *'
+   # - cron: '10 * * * *'
   workflow_dispatch: {}
 
 permissions:
