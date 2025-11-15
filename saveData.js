@@ -27,13 +27,15 @@ async function saveData() {
       const price = values.p;
       const stock = values.c;
 
-      if (typeof stock === 'number' && stock >= 1) {
-        transformed.items[name] = {
-          price: price,
-          stock: stock,
-        };
-      }
-    }
+  const priceConverted = +(price / 7.1).toFixed(2);
+
+  if (typeof stock === 'number' && stock >= 1) {
+    transformed.items[name] = {
+      price: priceConverted,
+      stock: stock,
+    };
+  }
+}
 
     // dodaj timestamp (przydatne debugowanie)
     transformed.generated_at = new Date().toISOString();
