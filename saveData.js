@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const API_KEY = process.env.BUFF_API_KEY || ""; // lepiej trzymać klucz w GitHub Secret
+const API_KEY = process.env.BUFF_API_KEY || "8R4voOJHFLcxte3GhBMNKjSmkpQRO7k8bsR6TypaOS5O-cKdzK"; // lepiej trzymać klucz w GitHub Secret
 if (!API_KEY) {
   console.warn("Nie ustawiono BUFF_API_KEY. Używasz przykładowego URL (jeśli podałeś w kodzie).");
 }
