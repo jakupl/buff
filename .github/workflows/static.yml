@@ -3,7 +3,7 @@ name: Update BUFF price list
 on:
   schedule:
     # runs at 10 minutes past every hour (cron uses UTC)
-   # - cron: '10 * * * *'
+    # - cron: '10 * * * *'
   workflow_dispatch: {}
 
 permissions:
@@ -23,18 +23,27 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install deps (if any)
-        run: |
-          # brak zależności w tym przykładzie; jeśli dodasz pakiety, zainstaluj je tutaj
-          echo "No dependencies"
+      - name: Install node-fetch (required by saveData.js)
+        run: npm install node-fetch@2
 
-      - name: Generate buffPriceList.json
+      - name: Generate skinstable.json (via saveData.js)
         env:
-          BUFF_API_KEY: ${{ secrets.BUFF_API_KEY }}
-          BUFF_API_URL: ${{ secrets.BUFF_API_URL }} # opcjonalne
+          PRICE_MP_API_KEY: ${{ secrets.PRICE_MP_API_KEY }}
         run: node saveData.js
 
+      - name: Copy to docs/buffPriceList.json (format expected by repo)
+        run: |
+          mkdir -p docs
+          if [ -f ./buffPriceList.json ]; then
+            cp ./buffPriceList.json ./docs/buffPriceList.json
+            echo "Copied skinstable.json -> docs/buffPriceList.json"
+          else
+            echo "Warning: skinstable.json not found — nothing to copy"
+          fi
+
       - name: Commit generated file if changed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -45,6 +54,3 @@ jobs:
             git commit -m "chore: update buffPriceList.json"
             git push
           fi
-        env:
-          # GITHUB_TOKEN jest automatycznie dostępny w runnerze
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
