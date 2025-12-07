@@ -1,51 +1,100 @@
 // saveData.js
+// Zależności: node-fetch (v2.x dla require). `npm install node-fetch@2`
+// Ustawienie: export PRICE_MP_API_KEY="your_api_key"
+
 const fs = require('fs');
 const path = require('path');
+const fetch = require('node-fetch');
 
-const API_KEY = process.env.BUFF_API_KEY || "8R4voOJHFLcxte3GhBMNKjSmkpQRO7k8bsR6TypaOS5O-cKdzK"; // lepiej trzymać klucz w GitHub Secret
-if (!API_KEY) {
-  console.warn("Nie ustawiono BUFF_API_KEY. Używasz przykładowego URL (jeśli podałeś w kodzie).");
-}
+const API_URL = 'https://api.pricempire.com/v4/trader/items/prices?app_id=730&sources=buff163,skins&currency=USD&avg=false&median=false&inflation_threshold=-1';
+const OUTPUT_FILE = path.resolve(__dirname, 'skinstable.json'); // zmień nazwę, jeśli chcesz
 
-const url = process.env.BUFF_API_URL || `https://skins-table.com/api_v2/items?apikey=${API_KEY}&app=730&site=BUFF.163`;
-const outDir = path.join(process.cwd(), 'docs'); // zapis do docs/ (GitHub Pages)
-const outFile = path.join(outDir, 'buffPriceList.json');
-
-async function saveData() {
-  try {
-    // upewnij się, że katalog docs istnieje
-    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Błąd HTTP: ${response.status}`);
-
-    const data = await response.json();
-
-    const transformed = { items: {} };
-
-    for (const [name, values] of Object.entries(data.items || {})) {
-      const price = values.p;
-      const stock = values.c;
-
-  const priceConverted = +(price / 7.1).toFixed(2);
-
-  if (typeof stock === 'number' && stock >= 1) {
-    transformed.items[name] = {
-      price: priceConverted,
-      stock: stock,
-    };
-  }
-}
-
-    // dodaj timestamp (przydatne debugowanie)
-    transformed.generated_at = new Date().toISOString();
-
-    fs.writeFileSync(outFile, JSON.stringify(transformed, null, 2), 'utf-8');
-    console.log(`Dane zapisane -> ${outFile}`);
-  } catch (err) {
-    console.error("Błąd pobierania danych:", err && err.message ? err.message : err);
+async function fetchAndSave() {
+  const apiKey = "d87b7114-fed2-4935-b92f-05dcce192f94";
+  if (!apiKey) {
+    console.error('Brak PRICE_MP_API_KEY w zmiennych środowiskowych. Ustaw: export PRICE_MP_API_KEY="your_api_key"');
     process.exitCode = 1;
+    return;
+  }
+
+  let res;
+  try {
+    res = await fetch(API_URL, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Accept': 'application/json'
+      },
+      // jeśli potrzebujesz timeoutu, obsłuż go wyżej lub użyj AbortController
+    });
+  } catch (err) {
+    console.error('Błąd połączenia z API:', err);
+    return;
+  }
+
+  if (!res.ok) {
+    console.error(`Błąd API: HTTP ${res.status} ${res.statusText}`);
+    const txt = await res.text().catch(()=>null);
+    if (txt) console.error('Treść odpowiedzi:', txt);
+    return;
+  }
+
+  let data;
+  try {
+    data = await res.json();
+  } catch (err) {
+    console.error('Nie udało się sparsować JSON z odpowiedzi:', err);
+    return;
+  }
+
+  if (!Array.isArray(data)) {
+    console.error('Oczekiwano tablicy jako odpowiedzi. Otrzymano:', typeof data);
+    return;
+  }
+
+  // Transformacja: bierzemy tylko provider_key === 'buff163'
+  const out = data.reduce((acc, item) => {
+    if (!item || typeof item.market_hash_name !== 'string' || !Array.isArray(item.prices)) return acc;
+
+    // Znajdź pierwszy obiekt w prices z provider_key 'buff163'
+    const buffRec = item.prices.find(p => p && p.provider_key === 'buff163');
+
+    // Jeśli brak price lub count — pomijamy (możesz zmienić, żeby wpisywać null/0)
+    if (!buffRec || typeof buffRec.price === 'undefined' || typeof buffRec.count === 'undefined') return acc;
+
+    // price z API prawdopodobnie w "centach" — użytkownik prosił o podzielenie przez 100
+    const priceDivided = Number(buffRec.price) / 100;
+
+    // Zabezpieczenia: upewnij się, że liczby są sensowne
+    if (!isFinite(priceDivided)) return acc;
+    const stock = Number(buffRec.count);
+    if (!Number.isFinite(stock)) return acc;
+
+    acc.push({
+      market_hash_name: item.market_hash_name,
+      price: priceDivided,        // cena po podzieleniu przez 100
+      stock: stock,               // count -> stock
+      updated_at: buffRec.updated_at || null
+    });
+    return acc;
+  }, []);
+
+  try {
+    fs.writeFileSync(OUTPUT_FILE, JSON.stringify(out, null, 2), 'utf8');
+    console.log(`Zapisano ${out.length} rekordów do ${OUTPUT_FILE}`);
+  } catch (err) {
+    console.error('Błąd zapisu pliku:', err);
   }
 }
 
-saveData();
+// jeśli uruchamiasz ten plik bezpośrednio: node saveData.js
+if (require.main === module) {
+  fetchAndSave().catch(err => {
+    console.error('Nieoczekiwany błąd:', err);
+  });
+}
+
+// eksport funkcji do użycia w innych częściach projektu
+module.exports = {
+  fetchAndSave
+};
