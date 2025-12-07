@@ -7,7 +7,7 @@ const path = require('path');
 const fetch = require('node-fetch');
 
 const API_URL = 'https://api.pricempire.com/v4/trader/items/prices?app_id=730&sources=buff163,skins&currency=USD&avg=false&median=false&inflation_threshold=-1';
-const OUTPUT_FILE = path.resolve(__dirname, 'skinstable.json'); // zmień nazwę, jeśli chcesz
+const OUTPUT_FILE = path.resolve(__dirname, 'buffPriceList.json'); // zmień nazwę, jeśli chcesz
 
 async function fetchAndSave() {
   const apiKey = "d87b7114-fed2-4935-b92f-05dcce192f94";
