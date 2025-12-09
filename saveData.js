@@ -10,7 +10,7 @@ const API_URL = 'https://api.pricempire.com/v4/trader/items/prices?app_id=730&so
 const OUTPUT_FILE = path.resolve(__dirname, 'buffPriceList.json'); // zmień nazwę, jeśli chcesz
 
 async function fetchAndSave() {
-  const apiKey = "d87b7114-fed2-4935-b92f-05dcce192f94";
+  const apiKey = process.env.PRICE_MP_API_KEY || ''; // pobieraj z env
   if (!apiKey) {
     console.error('Brak PRICE_MP_API_KEY w zmiennych środowiskowych. Ustaw: export PRICE_MP_API_KEY="your_api_key"');
     process.exitCode = 1;
@@ -25,7 +25,6 @@ async function fetchAndSave() {
         'Authorization': `Bearer ${apiKey}`,
         'Accept': 'application/json'
       },
-      // jeśli potrzebujesz timeoutu, obsłuż go wyżej lub użyj AbortController
     });
   } catch (err) {
     console.error('Błąd połączenia z API:', err);
@@ -52,36 +51,51 @@ async function fetchAndSave() {
     return;
   }
 
-  // Transformacja: bierzemy tylko provider_key === 'buff163'
-  const out = data.reduce((acc, item) => {
-    if (!item || typeof item.market_hash_name !== 'string' || !Array.isArray(item.prices)) return acc;
+  // Zbudujemy obiekt wynikowy: { updated_at: "...", "market_hash_name": { price, stock }, ... }
+  const resultObj = {};
+  let latestTimestamp = null; // będzie trzymac najnowszy updated_at (Date)
 
-    // Znajdź pierwszy obiekt w prices z provider_key 'buff163'
+  for (const item of data) {
+    if (!item || typeof item.market_hash_name !== 'string' || !Array.isArray(item.prices)) continue;
+
     const buffRec = item.prices.find(p => p && p.provider_key === 'buff163');
+    if (!buffRec || typeof buffRec.price === 'undefined' || typeof buffRec.count === 'undefined') continue;
 
-    // Jeśli brak price lub count — pomijamy (możesz zmienić, żeby wpisywać null/0)
-    if (!buffRec || typeof buffRec.price === 'undefined' || typeof buffRec.count === 'undefined') return acc;
-
-    // price z API prawdopodobnie w "centach" — użytkownik prosił o podzielenie przez 100
     const priceDivided = Number(buffRec.price) / 100;
-
-    // Zabezpieczenia: upewnij się, że liczby są sensowne
-    if (!isFinite(priceDivided)) return acc;
+    if (!isFinite(priceDivided)) continue;
     const stock = Number(buffRec.count);
-    if (!Number.isFinite(stock)) return acc;
+    if (!Number.isFinite(stock)) continue;
 
-    acc.push({
-      market_hash_name: item.market_hash_name,
-      price: priceDivided,        // cena po podzieleniu przez 100
-      stock: stock,               // count -> stock
-      updated_at: buffRec.updated_at || null
-    });
-    return acc;
-  }, []);
+    // Spróbuj sparsować updated_at z rekordu; jeśli nie ma, pomin lub nie aktualizuj timestampu
+    let recTs = null;
+    if (buffRec.updated_at) {
+      const parsed = Date.parse(buffRec.updated_at);
+      if (!Number.isNaN(parsed)) recTs = new Date(parsed);
+    }
+
+    if (recTs) {
+      if (!latestTimestamp || recTs > latestTimestamp) latestTimestamp = recTs;
+    }
+
+    // Wstawiamy parę: klucz = market_hash_name, wartość = { price, stock }
+    // Uwaga: nazwy mogą się powtarzać — ostatni wpis nadpisze wcześniejszy
+    resultObj[item.market_hash_name] = {
+      price: priceDivided,
+      stock: stock
+    };
+  }
+
+  // jeśli nie znaleziono żadnego updated_at w danych, użyj aktualnego czasu
+  const updatedAtIso = (latestTimestamp ? latestTimestamp.toISOString() : new Date().toISOString());
+
+  // Stwórz finalny obiekt z updated_at na górze
+  const finalObj = Object.assign({ updated_at: updatedAtIso }, resultObj);
 
   try {
-    fs.writeFileSync(OUTPUT_FILE, JSON.stringify(out, null, 2), 'utf8');
-    console.log(`Zapisano ${out.length} rekordów do ${OUTPUT_FILE}`);
+    fs.writeFileSync(OUTPUT_FILE, JSON.stringify(finalObj, null, 2), 'utf8');
+    // policz ile pozycji (bez pola updated_at)
+    const count = Object.keys(finalObj).length - (finalObj.updated_at ? 1 : 0);
+    console.log(`Zapisano ${count} rekordów do ${OUTPUT_FILE} (updated_at: ${updatedAtIso})`);
   } catch (err) {
     console.error('Błąd zapisu pliku:', err);
   }
