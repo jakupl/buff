@@ -10,7 +10,7 @@ const API_URL = 'https://api.pricempire.com/v4/trader/items/prices?app_id=730&so
 const OUTPUT_FILE = path.resolve(__dirname, 'buffPriceList.json'); // zmień nazwę, jeśli chcesz
 
 async function fetchAndSave() {
-  const apiKey = process.env.PRICE_MP_API_KEY || ''; // pobieraj z env
+  const apiKey = process.env.PRICE_MP_API_KEY || 'd87b7114-fed2-4935-b92f-05dcce192f94'; // pobieraj z env
   if (!apiKey) {
     console.error('Brak PRICE_MP_API_KEY w zmiennych środowiskowych. Ustaw: export PRICE_MP_API_KEY="your_api_key"');
     process.exitCode = 1;
