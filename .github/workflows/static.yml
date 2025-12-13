@@ -2,12 +2,12 @@ name: Update BUFF price list
 
 on:
   schedule:
-    # runs at 10 minutes past every hour (cron uses UTC)
+    #
      - cron: '15 * * * *'
   workflow_dispatch: {}
 
 permissions:
-  contents: write   # potrzebne do pushowania zmian przez GITHUB_TOKEN
+  contents: write   
 
 jobs:
   update:
